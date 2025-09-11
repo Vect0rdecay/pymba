@@ -1,0 +1,42 @@
+# Default scan profile for Pymba
+# This profile provides a balanced analysis with good performance
+
+# Core settings
+threaded: true
+html_report: true
+format_log: true
+short_path: true
+
+# Analysis settings
+rtos: false  # Assume Linux-based firmware by default
+binary_extended: false
+max_ext_check_bins: 10
+
+# Security analysis
+yara_enabled: true
+cwe_checker_enabled: true
+capa_enabled: true
+ghidra_enabled: false  # Disabled by default (heavy)
+radare2_enabled: true
+
+# Emulation settings
+qemulation: false  # User-mode emulation (disabled by default)
+full_emulation: false  # System emulation (disabled by default)
+
+# Module settings
+module_blacklist:
+  - "S10_binaries_basic_check"  # Long running
+  - "S15_radare_decompile_checks"  # Heavy analysis
+  - "S99_grepit"  # Very long running
+  - "S110_yara_check"  # Can be slow
+
+# Performance settings
+max_threads: 0  # Auto-detect
+max_module_threads: 0  # Auto-detect
+
+# VEX metrics
+vex_metrics: true
+
+# GPT integration (disabled by default)
+gpt_option: false
+
