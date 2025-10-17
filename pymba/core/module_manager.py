@@ -106,13 +106,13 @@ class ModuleManager:
         
     def discover_modules(self) -> Dict[str, ModuleInfo]:
         """Discover all available modules in the module directories."""
-        self.log_manager.print_info("Discovering available modules...")
+        self.log_manager.info("Discovering available modules...")
         
         discovered_modules = {}
         
         for category, module_path in self.module_paths.items():
             if not module_path.exists():
-                self.log_manager.print_warning(f"Module path does not exist: {module_path}")
+                self.log_manager.warning(f"Module path does not exist: {module_path}")
                 continue
             
             # Look for Python module files
@@ -121,48 +121,53 @@ class ModuleManager:
                     continue
                 
                 module_name = module_file.stem
-                full_name = f"{category.value[0]}{module_name}"
                 
                 try:
                     # Import the module
                     module_class = self._load_module_class(module_path, module_file)
                     if module_class:
+                        # Use the actual class name instead of file name
+                        class_name = module_class.__name__
                         # Extract module information
-                        module_info = self._extract_module_info(module_class, category, full_name)
-                        discovered_modules[full_name] = module_info
-                        self.modules[full_name] = module_class
+                        module_info = self._extract_module_info(module_class, category, class_name)
+                        discovered_modules[class_name] = module_info
+                        self.modules[class_name] = module_class
+                        self.module_info[class_name] = module_info
                         
-                        self.log_manager.print_debug(f"Discovered module: {full_name}")
+                        self.log_manager.debug(f"Discovered module: {class_name}")
                 
                 except Exception as e:
-                    self.log_manager.print_warning(f"Failed to load module {module_name}: {e}")
+                    self.log_manager.warning(f"Failed to load module {module_name}: {e}")
         
-        self.log_manager.print_success(f"Discovered {len(discovered_modules)} modules")
+        self.log_manager.success(f"Discovered {len(discovered_modules)} modules")
         return discovered_modules
     
     def _load_module_class(self, module_path: Path, module_file: Path) -> Optional[Type]:
         """Load a module class from a Python file."""
         try:
-            # Add module path to Python path
-            module_dir = str(module_path.parent.parent)
-            if module_dir not in sys.path:
-                sys.path.insert(0, module_dir)
+            # Add pymba root to Python path
+            pymba_root = str(module_path.parent.parent.parent)
+            if pymba_root not in sys.path:
+                sys.path.insert(0, pymba_root)
             
-            # Import the module
-            module_name = f"modules.{module_path.name}.{module_file.stem}"
+            # Import the module using correct path
+            module_name = f"pymba.modules.{module_path.name}.{module_file.stem}"
             module = importlib.import_module(module_name)
             
             # Find the module class (should be the main class in the module)
             for name, obj in inspect.getmembers(module, inspect.isclass):
-                if (name.lower().startswith(module_path.name.lower()) and 
-                    hasattr(obj, 'run') and 
-                    obj.__module__ == module_name):
+                # Look for classes that have a 'run' method and are defined in this module
+                # Skip base classes and imported classes
+                if (hasattr(obj, 'run') and 
+                    obj.__module__ == module_name and
+                    not name.startswith('Base') and
+                    name != 'Path'):
                     return obj
             
             return None
             
         except Exception as e:
-            self.log_manager.print_debug(f"Error loading module class from {module_file}: {e}")
+            self.log_manager.debug(f"Error loading module class from {module_file}: {e}")
             return None
     
     def _extract_module_info(self, module_class: Type, category: ModuleCategory, 
@@ -213,7 +218,7 @@ class ModuleManager:
         """Register a module manually."""
         self.modules[name] = module_class
         self.module_info[name] = module_info
-        self.log_manager.print_debug(f"Registered module: {name}")
+        self.log_manager.debug(f"Registered module: {name}")
     
     def get_module(self, name: str) -> Optional[Type]:
         """Get a module class by name."""
@@ -225,10 +230,15 @@ class ModuleManager:
     
     def list_modules(self, category: Optional[ModuleCategory] = None) -> List[str]:
         """List available modules, optionally filtered by category."""
+        blacklist = getattr(self.config, 'module_blacklist', [])
+        
         if category:
-            return [name for name, info in self.module_info.items() 
-                   if info.category == category and info.enabled]
-        return [name for name, info in self.module_info.items() if info.enabled]
+            result = [name for name, info in self.module_info.items() 
+                     if info.category == category and info.enabled and name not in blacklist]
+            self.log_manager.debug(f"list_modules({category.name}): found {len(result)} modules, blacklist={blacklist}")
+            return result
+        return [name for name, info in self.module_info.items() 
+               if info.enabled and name not in blacklist]
     
     def execute_module(self, module_name: str, **kwargs) -> ModuleResult:
         """Execute a single module."""
@@ -241,7 +251,7 @@ class ModuleManager:
         module_class = self.modules[module_name]
         module_info = self.module_info[module_name]
         
-        self.log_manager.print_info(f"Executing module: {module_name}")
+        self.log_manager.info(f"Executing module: {module_name}")
         
         # Create module instance
         try:
@@ -272,7 +282,7 @@ class ModuleManager:
         except Exception as e:
             result.status = ModuleStatus.FAILED
             result.error = str(e)
-            self.log_manager.print_error(f"Module {module_name} failed: {e}")
+            self.log_manager.error(f"Module {module_name} failed: {e}")
         
         finally:
             result.end_time = time.time()
@@ -292,10 +302,10 @@ class ModuleManager:
                           if name in self.module_info and self.module_info[name].enabled]
         
         if not enabled_modules:
-            self.log_manager.print_warning("No enabled modules to execute")
+            self.log_manager.warning("No enabled modules to execute")
             return {}
         
-        self.log_manager.print_info(f"Executing {len(enabled_modules)} modules in parallel")
+        self.log_manager.info(f"Executing {len(enabled_modules)} modules in parallel")
         
         # Determine execution strategy
         if self.use_multiprocessing:
@@ -324,7 +334,7 @@ class ModuleManager:
                 try:
                     result = future.result()
                     results[module_name] = result
-                    self.log_manager.print_debug(f"Module {module_name} completed with status: {result.status}")
+                    self.log_manager.debug(f"Module {module_name} completed with status: {result.status}")
                 except Exception as e:
                     results[module_name] = ModuleResult(
                         module_name, ModuleStatus.FAILED,
@@ -354,7 +364,7 @@ class ModuleManager:
                 try:
                     result = future.result()
                     results[module_name] = result
-                    self.log_manager.print_debug(f"Module {module_name} completed with status: {result.status}")
+                    self.log_manager.debug(f"Module {module_name} completed with status: {result.status}")
                 except Exception as e:
                     results[module_name] = ModuleResult(
                         module_name, ModuleStatus.FAILED,
@@ -375,7 +385,7 @@ class ModuleManager:
         
         for module_name in module_names:
             if module_name in self.module_info and not self.module_info[module_name].enabled:
-                self.log_manager.print_debug(f"Skipping disabled module: {module_name}")
+                self.log_manager.debug(f"Skipping disabled module: {module_name}")
                 continue
             
             result = self.execute_module(module_name)
@@ -383,7 +393,7 @@ class ModuleManager:
             
             # Stop on critical failure
             if result.status == ModuleStatus.FAILED and result.exit_code != 0:
-                self.log_manager.print_error(f"Critical failure in module {module_name}, stopping sequence")
+                self.log_manager.error(f"Critical failure in module {module_name}, stopping sequence")
                 break
         
         return results
@@ -416,3 +426,41 @@ class ModuleManager:
     def get_module_result(self, module_name: str) -> Optional[ModuleResult]:
         """Get execution result for a specific module."""
         return self.module_results.get(module_name)
+    
+    def run_module_group(self, category: str, threaded: bool = True) -> List[int]:
+        """Run all modules in a specific category."""
+        # Map category letters to full names
+        category_map = {
+            'P': ModuleCategory.P,
+            'S': ModuleCategory.S,
+            'L': ModuleCategory.L,
+            'F': ModuleCategory.F,
+            'Q': ModuleCategory.Q,
+            'D': ModuleCategory.D
+        }
+        
+        if category not in category_map:
+            self.log_manager.error(f"Invalid category: {category}")
+            return []
+        
+        category_enum = category_map[category]
+        module_names = self.list_modules(category_enum)
+        
+        if not module_names:
+            self.log_manager.warning(f"No modules found for category {category}")
+            return []
+        
+        # Sort modules by priority
+        module_names.sort(key=lambda name: self.module_info[name].priority)
+        
+        self.log_manager.info(f"Running {len(module_names)} modules in category {category}")
+        
+        if threaded:
+            # Run modules in parallel
+            results = self.execute_modules_parallel(module_names)
+        else:
+            # Run modules sequentially
+            results = self.execute_module_sequence(module_names)
+        
+        # Return exit codes
+        return [results[name].exit_code for name in module_names if name in results]

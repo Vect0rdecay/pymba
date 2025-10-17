@@ -86,7 +86,7 @@ class P50_binwalk_extractor(BasePModule):
         # Fallback: Check if Docker is available for binwalk
         if shutil.which('docker'):
             try:
-                result = subprocess.run(['docker', 'run', '--rm', 'reversemode/binwalk', '--version'], 
+                result = subprocess.run(['sudo', 'docker', 'run', '--rm', 'reversemode/binwalk', '--version'], 
                                       capture_output=True, 
                                       text=True, 
                                       timeout=15)
@@ -181,7 +181,7 @@ class P50_binwalk_extractor(BasePModule):
         if self.use_docker:
             # Docker-based extraction
             cmd = [
-                'docker', 'run', '--rm',
+                'sudo', 'docker', 'run', '--rm',
                 '-v', f'{self.firmware_path}:/input/firmware.bin:ro',
                 '-v', f'{self.extraction_dir}:/output',
                 'reversemode/binwalk',

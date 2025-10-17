@@ -23,7 +23,7 @@ class PymbaEngine:
     def __init__(self, config: PymbaConfig):
         self.config = config
         self.logger = PymbaLogger(config.log_dir)
-        self.module_manager = ModuleManager(config, self.logger)
+        self.module_manager = ModuleManager(self.logger, config)
         self.start_time = time.time()
         self.testing_done = False
         
@@ -50,7 +50,7 @@ class PymbaEngine:
         self._ensure_external_tools()
 
         # Load modules
-        self.module_manager.load_modules()
+        self.module_manager.discover_modules()
         
         # Print welcome message
         self._print_welcome()
