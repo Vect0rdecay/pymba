@@ -91,28 +91,6 @@ Python port of EMBA (Embedded Linux Analyzer) for firmware security analysis.
 - **Size**: 3.5MB
 - **Status**: Ready for testing
 
-## Immediate Next Steps (Priority Order)
-
-### Step 1: Fix Module Discovery
-- Debug why modules aren't being loaded
-- Ensure proper module registration
-- Test with enabled modules
-
-### Step 2: Fix Binwalk Container Integration
-- Handle Docker sudo permissions
-- Test container execution
-- Validate volume mounting
-
-### Step 3: Test Extraction Pipeline
-- Use real firmware from `/home/admin/firmware/`
-- Test end-to-end extraction
-- Validate extracted content
-
-### Step 4: Create Container Management System
-- Build reusable container execution framework
-- Standardize tool interfaces
-- Implement proper error handling
-
 ## Success Criteria
 
 ### Phase 1 Success
